@@ -1,0 +1,174 @@
+###
+##  F5 LB Automation POC.
+#   This is a first Gen Shell Script to Automate F5 LB for Services Provisioninig.
+#   Version:6
+#   Chris Didato
+#   https://github.com/Didato/
+#   I hope it helps.  
+###
+
+#! /bin/bash
+scriptname="$0"
+directive="$1"
+poolname="$2"
+ip="$3"
+port="$4"
+ipnet="$5"
+vlan="$6"
+vsname="$7"
+vlanname="$8"
+interfacenumber="$9"
+source-addr="$10"
+timeout="$11"
+mask="$12"
+pr_cookie="$13"
+expiration="$14"
+monitorname="$15"
+recv="$16"
+
+# variables 
+user=root
+host=172.24.192.8
+
+#example# ssh -x root@f5 'tmsh create ltm pool pooltest members add { 192.168.1.101:85 }'
+# modify ltm pool pooltest members delete { 192.168.1.101:85 }
+# modify ltm pool pooltest members add { 192.168.1.101:85 }
+#ssh $user@$host \'tmsh' 'create ltm pool $poolname' 'members add { $ip:$port }\'
+
+
+#       Usage statement
+USAGE () 
+{
+echo "Usage: $0 directive poolname ip port "
+echo "Directives = { add-pool | add-member | remove-members | delete-pool }"
+}
+
+
+SAVE ()
+{
+ssh $user@$host \save sys config\ ;	
+}
+
+case $directive in
+'add-pool')
+	ssh $user@$host \tmsh create ltm pool $poolname\ ;
+	SAVE
+	echo "The $poolname was added"
+	;;
+'add-member')
+	ssh $user@$host \tmsh modify ltm pool $poolname members add { $ip:$port }\ ;
+	SAVE
+	echo "Member $ip:$port was added to $poolname"
+	;;
+'remove-members')
+	ssh $user@$host \tmsh modify ltm pool $poolname members delete { $ip:$port }\ ;
+	SAVE
+	echo "Member $ip:$port was removed from $poolname"`
+	;;
+'delete-pool')
+	ssh $user@$host \tmsh delete ltm pool $poolname\ ;
+	SAVE
+	echo "Pool $poolname Removed"
+	;;
+'create-vlan')
+	ssh $user@$host \tmsh create net vlan $vlanname interfaces add { $interfacenumber }\ ;
+	SAVE
+	echo "Vlan $vlanname added"
+	;;
+'create-net-self')
+	ssh $user@$host \tmsh create net self $IP vlan $vlanname }\ ;
+	SAVE
+	echo "Self IP $IP added"
+	;;
+'create-netself-allowservice')
+	ssh $user@$host \tmsh create net self $IP vlan $vlanname allow-service replace-all-with { $proto:$port }\ ;
+	SAVE
+	echo "Self IP $IP added $proto $port allowed"
+	;;
+'create-vs')
+	ssh $user@$host \tmsh create ltm virtual $vsname destination { $ip:$port } pool $pool\ ;
+	SAVE
+	echo "$vsname on $ip $port created"
+	;;
+'create-vs')
+	ssh $user@$host \tmsh create ltm virtual $vsname destination { $ip:$port } pool $pool\ ;
+	SAVE
+	echo "$vsname on $ip $port created"
+	;;
+'create-persistence-rule')
+	ssh $user@$host \tmsh create ltm persistence $source-addr $pr_srcname timeout $timeout mask $mask\ ;
+	SAVE
+	echo "$vsname on $ip $port created"
+	;;
+'add-persistence-to-vs')
+	ssh $user@$host \tmsh modify ltm virtual $vsname persist replace-all-with { $pr_srcname }\ ;
+	SAVE
+	echo "Persistence Rule $pr_srcname added to $vsname"
+	;;
+'create-cookie')
+	ssh $user@$host \tmsh create ltm persistence cookie $pr_cookie expiration {$expiration}\ ;
+	SAVE
+	echo "$pr_cookie created"
+	;;
+'Map-cookie-to-vs')
+	ssh $user@$host \tmsh modify ltm virtual $vsname profiles replace-all-with { http } persist replace-all-with { $pr_cookie }\ ;
+	SAVE
+	echo "$pr_cookie added to profile $vsname"
+	;;
+'create-hc')
+	ssh $user@$host \tmsh create ltm monitor http $monitorname send $geturl recv $recv\ ;
+	SAVE
+	echo "$monitorname monitroing $geturl for $recv added"
+	;;
+*)
+	USAGE
+	;;
+esac
+
+
+
+# "Examples :
+# ============
+# Create VLAN TAGs on Internfaces
+# create net vlan Internal interfaces add { 1.2 }
+# create net vlan External interfaces add { 1.1 }
+# ===========
+# Create Self Addresses. 
+# =================
+# create net self 172.16.1.31/16 vlan Internal
+# create net self 10.10.1.31/16 vlan External allow-service replace-all-with { tcp:443 tcp:ssh }
+# create net self 172.16.1.33/16 vlan Internal floating enabled unit 1
+# create net self 10.10.1.33/16 vlan External floating enabled unit 1 allow-service replace-all-with { tcp:443 }
+# ===============
+# Create pools
+# ===============
+# create ltm pool POOL1 members add {172.16.20.1:80 172.16.20.2:80 172.16.20.3:http} monitor gateway_icmp
+# create ltm virtual VS_HTTP destination 10.10.1.100:80 pool POOL1
+# =======
+#save configs 
+# ===============
+# save sys config
+# restart sys service all
+# =================
+# Create Virtual Servers
+# =================
+# tmsh create ltm pool POOL_S members add {172.16.20.1:443 172.16.20.2:443 172.16.20.3:https} monitor https
+# tmsh create ltm virtual VS_HTTPS destination 10.10.1.102:443 pool POOL_S
+
+# ===============
+# Persistance
+# ===============
+# tmsh create ltm persistence source-addr PR_SRC timeout 15 mask 255.255.255.0
+# tmsh modify ltm virtual VS_HTTPS persist replace-all-with { PR_SRC }
+
+# ==============
+# Cookie Persistance
+# ===============
+# root@bigip1(Active)(tmos)# create ltm persistence cookie PR_COOKIE expiration 2:0:0:0
+# root@bigip1(Active)(tmos)# modify ltm virtual VS_HTTP profiles replace-all-with { http } persist replace-all-with { PR_COOKIE }"
+# 
+# =============
+# Heatlth Check
+# ============
+# create http my_http defaults-from http 
+# tmsh create ltm monitor http mytesthttp4 send "GET/ www.yahoo.com/index.html\r\n" recv "Server"
